@@ -61,6 +61,31 @@ To start the GUI, run:
 
 Note that it supports `--share`, `--port`, `--server`, and so on.
 
+```python
+from gradio_client import Client, handle_file
+
+client = Client("http://localhost:7860/")
+result = client.predict(
+		input_image=handle_file('xiang0.jpg'),
+		prompt="a young person with short, black hair and glasses, stands in front of a wooden wardrobe filled with various colored jackets. Xiang wears a light gray zip-up hoodie over a blue shirt, with a beige shoulder bag strap visible. capturing a casual and relaxed moment with a warm, natural lighting that highlights Xiang's friendly smile and gentle expression.",
+		n_prompt="",
+		seed=31337,
+		total_second_length=10,
+		latent_window_size=9,
+		steps=25,
+		cfg=1,
+		gs=10,
+		rs=0,
+		gpu_memory_preservation=6,
+		use_teacache=True,
+		api_name="/process"
+)
+print(result)
+
+from shutil import copy2
+copy2(result[0]["video"], result[0]["video"].split("/")[-1])
+```
+
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
 For example, to install sage-attention (linux):
