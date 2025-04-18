@@ -57,7 +57,7 @@ We recommend having an independent Python 3.10.
 
 To start the GUI, run:
 
-    python demo_gradio.py
+    python demo_gradio.py --share
 
 Note that it supports `--share`, `--port`, `--server`, and so on.
 
