@@ -46,7 +46,10 @@ One-click-package will be released soon. Please come back tomorrow.
 
 We recommend having an independent Python 3.10.
 
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+    #pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+    pip uninstall torch torchvision torchaudio -y
+    pip install -U torch torchvision torchaudio
+    
     pip install -r requirements.txt
     pip install "httpx[socks]" gradio spaces 
 
