@@ -87,7 +87,7 @@ copy2(result[0]["video"], result[0]["video"].split("/")[-1])
 ```
 
 #### XingQiu Demo 
-```
+```python
 #### huggingface-cli download svjack/Genshin-Impact-Portrait-with-Tags-Filtered-IID-Gender-SP --repo-type dataset --revision main --include "genshin_impact_XINGQIU_images_and_texts/*" --local-dir ./genshin_impact_XINGQIU_images_and_texts
 
 import os
