@@ -86,6 +86,75 @@ from shutil import copy2
 copy2(result[0]["video"], result[0]["video"].split("/")[-1])
 ```
 
+#### XingQiu Demo 
+```
+#### huggingface-cli download svjack/Genshin-Impact-Portrait-with-Tags-Filtered-IID-Gender-SP --repo-type dataset --revision main --include "genshin_impact_XINGQIU_images_and_texts/*" --local-dir ./genshin_impact_XINGQIU_images_and_texts
+
+import os
+from tqdm import tqdm
+from gradio_client import Client, handle_file
+from shutil import copy2
+
+# 设置路径
+input_dir = "genshin_impact_XINGQIU_images_and_texts/genshin_impact_XINGQIU_images_and_texts"
+output_dir = "genshin_impact_XINGQIU_FramePack"
+os.makedirs(output_dir, exist_ok=True)
+
+# 初始化Gradio客户端
+client = Client("http://localhost:7860/")
+
+# 获取所有png文件
+png_files = [f for f in os.listdir(input_dir) if f.endswith('.png')]
+
+# 处理每个文件对
+for png_file in tqdm(png_files, desc="Processing files"):
+    base_name = os.path.splitext(png_file)[0]
+    txt_file = f"{base_name}.txt"
+
+    # 检查对应的txt文件是否存在
+    txt_path = os.path.join(input_dir, txt_file)
+    if not os.path.exists(txt_path):
+        print(f"Warning: Missing text file for {png_file}")
+        continue
+
+    # 读取提示文本
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        prompt = f.read().strip()
+
+    # 处理图像
+    png_path = os.path.join(input_dir, png_file)
+    try:
+        result = client.predict(
+            input_image=handle_file(png_path),
+            prompt=prompt,
+            n_prompt="",
+            seed=31337,
+            total_second_length=5,
+            latent_window_size=9,
+            steps=25,
+            cfg=1,
+            gs=10,
+            rs=0,
+            gpu_memory_preservation=6,
+            use_teacache=True,
+            api_name="/process"
+        )
+
+        # 复制视频文件
+        video_path = result[0]["video"]
+        output_video = os.path.join(output_dir, f"{base_name}.mp4")
+        copy2(video_path, output_video)
+
+        # 复制txt文件
+        output_txt = os.path.join(output_dir, txt_file)
+        copy2(txt_path, output_txt)
+
+    except Exception as e:
+        print(f"Error processing {png_file}: {str(e)}")
+
+print("Processing completed!")
+```
+
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
 For example, to install sage-attention (linux):
