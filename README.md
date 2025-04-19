@@ -536,6 +536,145 @@ for item in tqdm(dataset, desc="Processing videos"):
 print("Processing complete!")
 ```
 
+#### Yi Chen Frame 4
+```python
+#git clone https://huggingface.co/datasets/svjack/Yi_Chen_Dancing_Animation_Videos
+
+import os
+import numpy as np
+from moviepy.editor import VideoFileClip
+from PIL import Image
+from datasets import Dataset, Image as HfImage
+from typing import Dict, List
+from skimage.metrics import structural_similarity as ssim
+
+def extract_video_frames(
+    video_path: str,
+    output_dir: str,
+    num_frames: int = 4
+) -> Dict[str, List[str]]:
+    """
+    从视频中提取均匀间隔的帧并保存
+    
+    参数:
+        video_path (str): 视频文件路径
+        output_dir (str): 输出目录
+        num_frames (int): 要提取的帧数
+        
+    返回:
+        Dict[str, List[str]]: 包含帧路径和差异值的字典
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    result = {"frame_paths": [], "diffs": []}
+    
+    try:
+        with VideoFileClip(video_path) as video:
+            duration = video.duration
+            frame_times = np.linspace(0, duration - 0.1, num_frames)
+            
+            # 提取并保存所有帧
+            frames = []
+            for i, t in enumerate(frame_times):
+                frame_path = os.path.join(output_dir, f"{video_name}_frame_{i}.png")
+                video.save_frame(frame_path, t=t)
+                frames.append(video.get_frame(t))
+                result["frame_paths"].append(frame_path)
+            
+            # 计算相邻帧差异
+            for i in range(len(frames)-1):
+                frame1 = np.mean(frames[i], axis=2)
+                frame2 = np.mean(frames[i+1], axis=2)
+                ssim_value, _ = ssim(frame1, frame2, full=True, data_range=1.0)
+                result["diffs"].append(1 - ssim_value)
+                
+        return result
+        
+    except Exception as e:
+        print(f"处理视频 {video_path} 时出错: {e}")
+        return {"frame_paths": [], "diffs": []}
+
+def process_videos_to_dataset(
+    input_dir: str,
+    output_dir: str,
+    num_frames: int = 4
+) -> Dataset:
+    """
+    处理所有视频并创建HuggingFace数据集
+    
+    参数:
+        input_dir (str): 输入视频目录
+        output_dir (str): 输出帧目录
+        num_frames (int): 每个视频提取的帧数
+        
+    返回:
+        Dataset: 包含所有视频帧的HuggingFace数据集
+    """
+    # 收集所有视频数据
+    all_data = {
+        "frame_0": [],
+        "frame_1": [],
+        "frame_2": [],
+        "frame_3": [],
+        "diff_0_1": [],
+        "diff_1_2": [],
+        "diff_2_3": []
+    }
+    
+    for root, _, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith('.mp4'):
+                video_path = os.path.join(root, file)
+                print(f"正在处理: {file}")
+                
+                # 提取帧
+                frame_data = extract_video_frames(video_path, output_dir, num_frames)
+                
+                if len(frame_data["frame_paths"]) == num_frames:
+                    # 添加各帧路径
+                    for i in range(num_frames):
+                        all_data[f"frame_{i}"].append(frame_data["frame_paths"][i])
+                    
+                    # 添加帧间差异
+                    for i in range(num_frames-1):
+                        all_data[f"diff_{i}_{i+1}"].append(frame_data["diffs"][i])
+    
+    # 创建数据集
+    dataset = Dataset.from_dict(all_data)
+    
+    # 将帧路径转换为PIL图像
+    def load_images(example):
+        for i in range(num_frames):
+            example[f"frame_{i}"] = Image.open(example[f"frame_{i}"])
+        return example
+    
+    dataset = dataset.map(load_images)
+    
+    # 转换为HuggingFace图像格式
+    for i in range(num_frames):
+        dataset = dataset.cast_column(f"frame_{i}", HfImage())
+    
+    return dataset
+
+if __name__ == "__main__":
+    # 配置参数
+    input_dir = "Yi_Chen_Dancing_Animation_Videos"
+    output_dir = "extracted_frames"
+    num_frames = 4  # 每个视频提取4帧
+    
+    # 处理视频并创建数据集
+    dataset = process_videos_to_dataset(input_dir, output_dir, num_frames)
+    
+    # 保存数据集
+    save_path = "yi_chen_dancing_dataset"
+    dataset.save_to_disk(save_path)
+    
+    # 上传到HuggingFace Hub
+    dataset.push_to_hub("svjack/Yi_Chen_Dancing_Animation_Frames_4")
+    
+    print(f"数据集已创建并保存到: {save_path}")
+```
+
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
 For example, to install sage-attention (linux):
