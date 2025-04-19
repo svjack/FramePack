@@ -229,6 +229,12 @@ for png_file in tqdm(png_files, desc="Processing files"):
 print("Processing completed!")
 ```
 
+```bash
+git clone https://github.com/nirvash/FramePack && cd FramePack
+
+python endframe.py --share --server "0.0.0.0" --port 7860
+```
+
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
 For example, to install sage-attention (linux):
