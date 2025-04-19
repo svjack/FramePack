@@ -460,6 +460,82 @@ git clone https://github.com/nirvash/FramePack && cd FramePack
 python endframe.py --share --server "0.0.0.0" --port 7860
 ```
 
+```python
+import os
+from datasets import load_dataset
+from gradio_client import Client, handle_file
+from shutil import copy2
+from tqdm import tqdm
+from PIL import Image
+import tempfile
+
+# Load dataset
+ds = load_dataset("svjack/Lelouch_Vi_Britannia_First_Last_Frame_Diff_Captioned")
+dataset = ds['train']  # Assuming we want the train split
+
+# Create output directory
+output_dir = "Lelouch_Vi_Britannia_FramePack_First_Last_Frame_Video_Captioned"
+os.makedirs(output_dir, exist_ok=True)
+
+# Initialize Gradio client
+client = Client("http://localhost:7860/")
+
+# Process each item with frame_diff < 0.9
+for item in tqdm(dataset, desc="Processing videos"):
+    if item['frame_diff'] >= 0.9:
+        continue
+        
+    # Save frames to temporary files
+    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as first_frame_file, \
+         tempfile.NamedTemporaryFile(suffix='.png', delete=False) as last_frame_file:
+        
+        # Save PIL images to temp files
+        first_frame = item['first_frame']
+        last_frame = item['last_frame']
+        first_frame.save(first_frame_file.name)
+        last_frame.save(last_frame_file.name)
+        
+        # Process with Gradio client
+        result = client.predict(
+            input_image=handle_file(first_frame_file.name),
+            end_frame=handle_file(last_frame_file.name),
+            prompt=item['text'],
+            n_prompt="",
+            seed=2119383695,
+            total_second_length=3,
+            latent_window_size=9,
+            steps=25,
+            cfg=1,
+            gs=10,
+            rs=0,
+            gpu_memory_preservation=6,
+            use_teacache=True,
+            use_random_seed=True,
+            save_section_frames=True,
+            api_name="/process"
+        )
+        
+        # Clean up temp files
+        os.unlink(first_frame_file.name)
+        os.unlink(last_frame_file.name)
+    
+    # Copy video to output directory
+    video_path = result[0]["video"]
+    video_filename = os.path.basename(video_path)
+    output_video_path = os.path.join(output_dir, video_filename)
+    copy2(video_path, output_video_path)
+    
+    # Save text to corresponding .txt file
+    text_filename = os.path.splitext(video_filename)[0] + ".txt"
+    text_path = os.path.join(output_dir, text_filename)
+    with open(text_path, 'w', encoding='utf-8') as f:
+        f.write(item['text'])
+    
+    tqdm.write(f"Processed: {video_filename}")
+
+print("Processing complete!")
+```
+
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
 For example, to install sage-attention (linux):
