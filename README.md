@@ -229,6 +229,231 @@ for png_file in tqdm(png_files, desc="Processing files"):
 print("Processing completed!")
 ```
 
+#### Lelouch_Vi_Britanni Demo
+```python
+git clone https://huggingface.co/datasets/svjack/Lelouch_Vi_Britannia_Videos_Captioned
+
+import os
+import shutil
+from moviepy.editor import VideoFileClip
+import numpy as np
+from skimage.metrics import structural_similarity as ssim
+
+def extract_first_and_last_frame(video_path, output_dir='output_frames'):
+    """
+    提取视频的第一帧和最后一帧
+
+    参数:
+        video_path (str): 输入视频文件的路径
+        output_dir (str): 输出目录，默认为'output_frames'
+
+    返回:
+        tuple: (第一帧路径, 最后一帧路径, 差异值)
+    """
+    # 创建输出目录（如果不存在）
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 获取视频文件名（不带扩展名）
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+
+    # 定义输出文件名
+    first_frame_path = os.path.join(output_dir, f"{video_name}_first_frame.png")
+    last_frame_path = os.path.join(output_dir, f"{video_name}_last_frame.png")
+    diff_file_path = os.path.join(output_dir, f"{video_name}_frame_diff.txt")
+
+    try:
+        # 加载视频文件
+        with VideoFileClip(video_path) as video:
+            # 获取第一帧
+            first_frame = video.get_frame(0)
+            video.save_frame(first_frame_path, t=0)
+
+            # 获取最后一帧
+            duration = video.duration
+            last_frame = video.get_frame(duration - 0.1)  # 稍微提前一点确保能获取到
+            video.save_frame(last_frame_path, t=duration - 0.1)
+
+            # 计算帧差异
+            first_frame_gray = np.mean(first_frame, axis=2)
+            last_frame_gray = np.mean(last_frame, axis=2)
+            data_range = 1.0
+            ssim_value, _ = ssim(first_frame_gray, last_frame_gray, full=True, data_range=data_range)
+            difference = 1 - ssim_value
+
+            # 保存差异值
+            with open(diff_file_path, 'w') as f:
+                f.write(str(difference))
+
+        print(f"成功提取帧: {first_frame_path} 和 {last_frame_path}, 差异值: {difference}")
+        return first_frame_path, last_frame_path, difference
+
+    except Exception as e:
+        print(f"处理视频时出错: {e}")
+        return None, None, None
+
+def process_all_videos(input_dir, output_dir):
+    """
+    处理输入目录中的所有MP4文件，并复制相关的文本文件
+
+    参数:
+        input_dir (str): 包含视频和文本文件的输入目录
+        output_dir (str): 输出目录
+    """
+    # 确保输出目录存在
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 遍历输入目录中的所有文件
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            file_path = os.path.join(root, file)
+
+            # 处理MP4文件
+            if file.lower().endswith('.mp4'):
+                print(f"正在处理视频文件: {file_path}")
+                extract_first_and_last_frame(file_path, output_dir)
+
+            # 复制文本文件
+            elif file.lower().endswith('.txt'):
+                output_path = os.path.join(output_dir, file)
+                shutil.copy2(file_path, output_path)
+                print(f"已复制文本文件: {file_path} -> {output_path}")
+
+if __name__ == "__main__":
+    # 定义输入和输出目录
+    input_dataset_dir = "Lelouch_Vi_Britannia_Videos_Captioned"
+    output_dir = "Lelouch_Vi_Britannia_First_Last_Frame_Captioned_saved"
+
+    # 处理所有视频和文本文件
+    process_all_videos(input_dataset_dir, output_dir)
+
+    print("所有文件处理完成!")
+
+from datasets import Dataset, DatasetDict
+import os
+from PIL import Image
+
+def create_huggingface_dataset(data_dir):
+    """
+    从指定目录创建HuggingFace数据集，每行包含:
+    - first_frame: 第一帧图片
+    - last_frame: 最后一帧图片
+    - text: 关联的文本内容
+    - frame_diff: 两帧差异值
+    
+    参数:
+        data_dir (str): 包含图片和文本文件的目录路径
+        
+    返回:
+        DatasetDict: 包含训练集和测试集的HuggingFace数据集
+    """
+    # 使用字典来存储匹配的文件，键为视频名前缀
+    video_data = {}
+    
+    # 遍历目录收集文件并匹配
+    for root, _, files in os.walk(data_dir):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            # 提取视频名前缀
+            if '_first_frame.png' in file:
+                prefix = file.split('_first_frame.png')[0]
+                if prefix not in video_data:
+                    video_data[prefix] = {'first_frame': file_path}
+                else:
+                    video_data[prefix]['first_frame'] = file_path
+                    
+            elif '_last_frame.png' in file:
+                prefix = file.split('_last_frame.png')[0]
+                if prefix not in video_data:
+                    video_data[prefix] = {'last_frame': file_path}
+                else:
+                    video_data[prefix]['last_frame'] = file_path
+                    
+            elif '_frame_diff.txt' in file:
+                prefix = file.split('_frame_diff.txt')[0]
+                if prefix not in video_data:
+                    video_data[prefix] = {}
+                try:
+                    with open(file_path, 'r') as f:
+                        diff_value = float(f.read().strip())
+                    video_data[prefix]['frame_diff'] = diff_value
+                except:
+                    video_data[prefix]['frame_diff'] = None
+                    
+            elif file.endswith('.txt') and '_frame_diff.txt' not in file:
+                prefix = file.split('.txt')[0]
+                if prefix not in video_data:
+                    video_data[prefix] = {}
+                video_data[prefix]['text_path'] = file_path
+    
+    # 准备最终数据集结构
+    dataset_data = {
+        'first_frame': [],
+        'last_frame': [],
+        'text': [],
+        'frame_diff': []
+    }
+    
+    # 处理每个视频的数据
+    for prefix, data in video_data.items():
+        # 确保所有必需字段都存在
+        if 'first_frame' in data and 'last_frame' in data:
+            # 读取文本内容
+            text_content = ""
+            if 'text_path' in data:
+                try:
+                    with open(data['text_path'], 'r', encoding='utf-8') as f:
+                        text_content = f.read()
+                except:
+                    text_content = ""
+            
+            # 添加数据
+            dataset_data['first_frame'].append(data['first_frame'])
+            dataset_data['last_frame'].append(data['last_frame'])
+            dataset_data['text'].append(text_content)
+            dataset_data['frame_diff'].append(data.get('frame_diff', None))
+    
+    # 创建数据集
+    dataset = Dataset.from_dict(dataset_data)
+    
+    # 添加图片处理功能
+    def process_example(example):
+        example['first_frame'] = Image.open(example['first_frame'])
+        example['last_frame'] = Image.open(example['last_frame'])
+        return example
+    
+    dataset = dataset.map(process_example)
+    
+    # 分割为训练集和测试集 (80-20分割)
+    #dataset = dataset.train_test_split(test_size=0.2, seed=42)
+    
+    return dataset
+
+# 使用示例
+if __name__ == "__main__":
+    data_dir = "Lelouch_Vi_Britannia_First_Last_Frame_Captioned_saved"
+    dataset = create_huggingface_dataset(data_dir)
+    
+    # 保存数据集到磁盘
+    save_path = "lelouch_dataset"
+    dataset.save_to_disk(save_path)
+    print(f"数据集已保存到: {save_path}")
+    
+    # 打印数据集信息
+    print("\n数据集结构:")
+    print(dataset)
+
+    '''
+    # 打印第一个示例
+    print("\n第一个训练示例:")
+    print({k: v if not isinstance(v, Image.Image) else "PIL Image" for k, v in dataset['train'][0].items()})
+    '''
+
+from datasets import Image as HfImage, Dataset
+dataset = dataset.cast_column("first_frame", HfImage()).cast_column("last_frame", HfImage())
+dataset.push_to_hub("svjack/Lelouch_Vi_Britannia_First_Last_Frame_Diff_Captioned")
+```
+
 ```bash
 git clone https://github.com/nirvash/FramePack && cd FramePack
 
