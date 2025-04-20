@@ -675,6 +675,100 @@ if __name__ == "__main__":
     print(f"数据集已创建并保存到: {save_path}")
 ```
 
+```python
+#### pip install moviepy==1.0.3 datasets
+
+import os
+import uuid
+from datasets import load_dataset
+from gradio_client import Client, handle_file
+from shutil import copy2
+from tqdm import tqdm
+from PIL import Image
+import tempfile
+from moviepy.editor import concatenate_videoclips, VideoFileClip
+
+# Load dataset
+ds = load_dataset("svjack/Yi_Chen_Dancing_Animation_Frames_4")
+dataset = ds['train']  # Assuming we want the train split
+
+# Create output directory
+output_dir = "Yi_Chen_Dancing_Animation_FramePack_Frames_4_Videos"
+os.makedirs(output_dir, exist_ok=True)
+
+# Initialize Gradio client
+client = Client("http://localhost:7860/")
+
+dataset_rev = [item for item in dataset]
+dataset_rev = dataset_rev[::-1]
+
+# Process each item
+for item in tqdm(dataset, desc="Processing videos"):
+    # Get all frames from the item
+    frames = [
+        item['frame_0'],
+        item['frame_1'],
+        item['frame_2'],
+        item['frame_3']
+    ]
+    
+    video_clips = []
+    
+    # Process each consecutive frame pair
+    for i in range(len(frames) - 1):
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as first_frame_file, \
+             tempfile.NamedTemporaryFile(suffix='.png', delete=False) as last_frame_file:
+            
+            # Save PIL images to temp files
+            frames[i].save(first_frame_file.name)
+            frames[i+1].save(last_frame_file.name)
+            
+            # Process with Gradio client
+            result = client.predict(
+                input_image=handle_file(first_frame_file.name),
+                end_frame=handle_file(last_frame_file.name),
+                prompt="The girl dances gracefully, with clear movements, full of charm.",
+                n_prompt="",
+                seed=2119383695,
+                total_second_length=3,
+                latent_window_size=9,
+                steps=25,
+                cfg=1,
+                gs=10,
+                rs=0,
+                gpu_memory_preservation=15,
+                use_teacache=True,
+                use_random_seed=True,
+                save_section_frames=True,
+                api_name="/process"
+            )
+            
+            # Clean up temp files
+            os.unlink(first_frame_file.name)
+            os.unlink(last_frame_file.name)
+        
+        # Save intermediate video
+        video_path = result[0]["video"]
+        video_clips.append(VideoFileClip(video_path))
+    
+    # Generate unique filename using UUID
+    video_filename = f"video_{uuid.uuid4()}.mp4"
+    output_video_path = os.path.join(output_dir, video_filename)
+    
+    # Concatenate all video clips
+    final_clip = concatenate_videoclips(video_clips)
+    final_clip.write_videofile(output_video_path)
+    
+    # Close all clips to free resources
+    for clip in video_clips:
+        clip.close()
+    
+    tqdm.write(f"Processed: {video_filename}")
+
+print("Processing complete!")
+
+```
+
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
 For example, to install sage-attention (linux):
