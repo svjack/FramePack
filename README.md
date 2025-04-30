@@ -457,6 +457,9 @@ dataset.push_to_hub("svjack/Lelouch_Vi_Britannia_First_Last_Frame_Diff_Captioned
 ```bash
 git clone https://github.com/nirvash/FramePack && cd FramePack
 
+pip install -r requirements.txt
+pip install torchvision
+
 python endframe.py --share --server "0.0.0.0" --port 7860
 ```
 
