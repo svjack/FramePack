@@ -460,6 +460,8 @@ git clone https://github.com/nirvash/FramePack && cd FramePack
 pip install -r requirements.txt
 pip install torchvision
 pip install "httpx[socks]"
+pip uninstall torch torchvision -y
+pip install torch torchvision
 
 python endframe.py --share --server "0.0.0.0" --port 7860
 ```
